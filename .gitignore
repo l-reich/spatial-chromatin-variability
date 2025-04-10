@@ -1,0 +1,30 @@
+# Data files
+data/*
+!data/.gitkeep
+!data/README.md
+
+# Results and figures
+results/*
+!results/.gitkeep
+figures/
+spatial_plots/
+spatial_plots_by_class/
+
+# Large files
+*.h5ad
+*.h5
+*.csv
+*.tsv
+
+# Jupyter notebook checkpoints
+.ipynb_checkpoints/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
