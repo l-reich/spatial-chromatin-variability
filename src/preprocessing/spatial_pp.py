@@ -103,6 +103,6 @@ adata_filtered = adata_filtered[mask_finite_rows]
 
 ### Preprocessing done, write h5ad file on disk
 
-h5ad_path = config.H5AD_DIR / "sp_pp.h5ad"
+h5ad_path = config.H5AD_DIR / "c_sp_ad.h5ad"
 
 adata_filtered.write(filename=h5ad_path)
