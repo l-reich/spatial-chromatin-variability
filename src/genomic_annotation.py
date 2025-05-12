@@ -1,4 +1,3 @@
-# Put these imports at the very top of your new genomic_annotation.py file
 import requests
 import gzip
 import io
