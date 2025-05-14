@@ -1,6 +1,7 @@
 import scanpy as sc
 import numpy as np
 import pandas as pd
+import muon as mu
 
 from src.utils import get_centroid
 from src import config
@@ -100,6 +101,19 @@ mask_finite_rows = ~mask_nan_rows
 
 adata_filtered = adata_filtered[mask_finite_rows]
 
+### QC/filtering cells with low gene counts
+
+sc.pp.calculate_qc_metrics(
+    adata_filtered, inplace=True, log1p=True, percent_top=(5, 10, 50)
+)
+
+print(f"Total number of cells: {adata_filtered.n_obs}")
+mu.pp.filter_obs(
+    adata_filtered,
+    "total_counts",
+    lambda x:  x >= 55,
+)
+print(f"Number of cells after filtering on total_fragment_counts: {adata_filtered.n_obs}")
 
 ### Preprocessing done, write h5ad file on disk
 
