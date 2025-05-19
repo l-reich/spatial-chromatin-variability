@@ -309,6 +309,72 @@ def plot_peak_gene_pairs(
         plt.show()
 
 
+def plot_peak_peak_pairs(
+    mapping_dict,
+    atac_adata,
+    n_pairs=10,
+    size=20
+):
+    """
+    Plot all peak–peak spatial accessibility pairs side-by-side using squidpy,
+    annotated with their genomic distance.
+
+    Parameters:
+    - mapping_dict (dict): Mapping from peak → [other peaks]
+    - atac_adata (AnnData): AnnData object with peak annotations
+    - n_pairs (int): Max number of peak–peak pairs to plot
+    - size (int): Dot size for scatter plots
+
+    Returns:
+    - None
+    """
+    pairs = []
+
+    for peak, other_peaks in mapping_dict.items():
+        for other_peak in other_peaks:
+            pairs.append((peak, other_peak))
+
+    # Limit number of pairs
+    pairs = pairs[:n_pairs]
+
+    for i, (peak1, peak2) in enumerate(pairs):
+        # Default distance string
+        distance_str = "unknown"
+
+        # Try to compute genomic distance
+        if all(p in atac_adata.var_names for p in [peak1, peak2]):
+            row1 = atac_adata.var.loc[peak1]
+            row2 = atac_adata.var.loc[peak2]
+            if row1["chrom"] == row2["chrom"]:
+                mid1 = (row1["start"] + row1["end"]) // 2
+                mid2 = (row2["start"] + row2["end"]) // 2
+                distance_str = f"{abs(mid1 - mid2):,} bp"
+
+        fig, axes = plt.subplots(1, 2, figsize=(8, 4))
+        fig.suptitle(f"Pair {i+1}: {peak1} ↔ {peak2}  |  Distance: {distance_str}", fontsize=12)
+
+        if peak1 in atac_adata.var_names:
+            sq.pl.spatial_scatter(
+                atac_adata, color=peak1, ax=axes[0], size=size, shape=None
+            )
+            axes[0].set_title("Peak 1")
+        else:
+            axes[0].set_title("Peak 1 (not found)")
+
+        if peak2 in atac_adata.var_names:
+            sq.pl.spatial_scatter(
+                atac_adata, color=peak2, ax=axes[1], size=size, shape=None
+            )
+            axes[1].set_title("Peak 2")
+        else:
+            axes[1].set_title("Peak 2 (not found)")
+
+        plt.tight_layout()
+        plt.show()
+
+
+
+
 def plot_peak_accessibility(
     peak_name: str,
     atac: anndata.AnnData,
@@ -356,3 +422,87 @@ def plot_peak_accessibility(
     ax.invert_yaxis()
     plt.tight_layout()
     plt.show()
+
+
+def get_promoter_overlapping_peaks(peaks_df, promoter_ccres):
+    """
+    Filter peaks that overlap with promoter-like cCREs (PLS).
+    
+    Parameters:
+    - peaks_df: pd.DataFrame with index = peak names and columns ['chrom', 'start', 'end']
+    - promoter_ccres: pd.DataFrame of cCREs with 'chrom', 'start', 'end'
+
+    Returns:
+    - List of overlapping peak names
+    """
+    overlaps = peaks_df.reset_index().merge(
+        promoter_ccres, on="chrom", how="inner", suffixes=("_peak", "_ccre")
+    )
+
+    overlaps = overlaps[
+        (overlaps["start_peak"] <= overlaps["end_ccre"]) &
+        (overlaps["end_peak"] >= overlaps["start_ccre"])
+    ]
+    return overlaps["index"].unique().tolist()
+
+
+def get_correlated_peaks_near_peaks(
+    peak_names,
+    atac,
+    p_p_similarity,
+    max_distance=100_000,
+    top_n_per_peak=10
+):
+    """
+    Identify spatially correlated and genomically proximal peaks for each input peak.
+
+    Parameters:
+    - peak_names (list): List of input peak names (e.g., 'chr1:12345-12456').
+    - atac (AnnData): ATAC AnnData object with peak annotations in .var['chrom', 'start', 'end'].
+    - p_p_similarity (np.ndarray): Peak–peak similarity matrix (shape: peaks x peaks).
+    - max_distance (int): Max genomic distance in bp.
+    - top_n_per_peak (int): Number of top correlated nearby peaks to return per peak.
+
+    Returns:
+    - dict: Mapping from each peak to a list of nearby correlated peaks.
+    """
+    peak_to_index = {name: i for i, name in enumerate(atac.var_names)}
+    results = {}
+
+    for peak_name in peak_names:
+        if peak_name not in peak_to_index:
+            continue
+
+        peak_idx = peak_to_index[peak_name]
+        peak_row = atac.var.loc[peak_name]
+        peak_chr = peak_row["chrom"]
+        peak_mid = (peak_row["start"] + peak_row["end"]) // 2
+
+        correlations = p_p_similarity[peak_idx]
+        top_peak_indices = np.argsort(correlations)[::-1]
+
+        filtered_peaks = []
+
+        for other_idx in top_peak_indices:
+            if other_idx == peak_idx:
+                continue  # skip self
+
+            other_peak = atac.var_names[other_idx]
+            other_row = atac.var.loc[other_peak]
+
+            if other_row["chrom"] != peak_chr:
+                continue
+
+            other_mid = (other_row["start"] + other_row["end"]) // 2
+            distance = abs(peak_mid - other_mid)
+
+            if distance <= max_distance:
+                filtered_peaks.append(other_peak)
+
+            if len(filtered_peaks) == top_n_per_peak:
+                break
+
+        if filtered_peaks:
+            results[peak_name] = filtered_peaks
+
+    return results
