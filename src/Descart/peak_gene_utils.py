@@ -1,6 +1,8 @@
 import numpy as np
 import pandas as pd
 import anndata
+import matplotlib.pyplot as plt
+import squidpy as sq
 
 
 def get_top_correlated_peaks_near_gene(
@@ -245,7 +247,7 @@ def plot_peak_gene_pairs(
     atac_adata,
     mode='peak_to_gene',
     n_pairs=10,
-    size=30
+    size=20
 ):
     """
     Plot all gene-peak spatial expression pairs side-by-side using squidpy.
@@ -305,3 +307,52 @@ def plot_peak_gene_pairs(
 
         plt.tight_layout()
         plt.show()
+
+
+def plot_peak_accessibility(
+    peak_name: str,
+    atac: anndata.AnnData,
+    threshold: float = 0.7,
+    size: int = 5,
+    cmap: str = "viridis"
+):
+    """
+    Plot spatial accessibility of a peak, greying out spots below a threshold.
+
+    Parameters:
+    - peak_name (str): Name of the peak (must be in atac.var_names).
+    - atac (AnnData): ATAC AnnData object with spatial coordinates in .obsm['spatial'].
+    - threshold (float): Minimum accessibility value to color a spot (else greyed out).
+    - size (int): Dot size in the plot.
+    - cmap (str): Colormap for non-zero accessibility.
+
+    Returns:
+    - None
+    """
+    if peak_name not in atac.var_names:
+        raise ValueError(f"Peak {peak_name} not found in atac.var_names.")
+
+    # Get peak values
+    peak_idx = atac.var_names.get_loc(peak_name)
+    values_sparse = atac.X[:, peak_idx]
+    values = np.array(values_sparse.todense()).flatten()
+
+    # Get spatial coordinates
+    coords = atac.obsm["spatial"]
+
+    # Masks
+    is_low = values < threshold
+    is_high = values >= threshold
+
+    # Plot
+    fig, ax = plt.subplots(figsize=(6, 6))
+    ax.scatter(coords[is_low, 0], coords[is_low, 1], c="lightgray", s=size, label="low")
+    sc = ax.scatter(coords[is_high, 0], coords[is_high, 1], c=values[is_high],
+                    cmap=cmap, s=size)
+    plt.colorbar(sc, ax=ax).set_label("Peak Accessibility")
+    ax.set_title(peak_name)
+    ax.set_xlabel("spatial1")
+    ax.set_ylabel("spatial2")
+    ax.invert_yaxis()
+    plt.tight_layout()
+    plt.show()
