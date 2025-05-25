@@ -2,7 +2,9 @@ import numpy as np
 import pandas as pd
 import anndata
 import matplotlib.pyplot as plt
+import seaborn as sns
 import squidpy as sq
+from scipy.stats import pearsonr, spearmanr, kruskal
 
 
 def get_top_correlated_peaks_near_gene(
@@ -506,3 +508,67 @@ def get_correlated_peaks_near_peaks(
             results[peak_name] = filtered_peaks
 
     return results
+
+
+def analyze_gene_peak_relationship(expr, atac, gene, peak, subclass_key="subclass", plot=False, method="spearman"):
+    """
+    Analyze the relationship between a gene's expression and a peak's accessibility across subclasses.
+    Returns the Spearman or Pearson correlation coefficient between mean expression and accessibility.
+
+    Parameters:
+        expr: AnnData object with gene expression.
+        atac: AnnData object with peak accessibility.
+        gene: str, gene name (must be in expr.var_names).
+        peak: str, peak name (must be in atac.var_names).
+        subclass_key: str, column in .obs indicating cell types.
+        plot: bool, whether to show violin and scatter plots.
+        method: str, one of {"spearman", "pearson"}
+
+    Returns:
+        rho: Correlation coefficient between mean expression and accessibility across subclasses.
+    """
+    # Extract and store vectors
+    expr.obs[f"{gene}_expr"] = expr[:, gene].X.toarray().flatten()
+    atac.obs[f"access_{gene}_peak"] = atac[:, peak].X.toarray().flatten()
+
+    # Means per subclass
+    mean_expr = expr.obs.groupby(subclass_key)[f'{gene}_expr'].mean()
+    mean_access = atac.obs.groupby(subclass_key)[f'access_{gene}_peak'].mean()
+    comparison_df = pd.DataFrame({'mean_expr': mean_expr, 'mean_access': mean_access}).dropna()
+
+    # Choose correlation method
+    if method == "spearman":
+        from scipy.stats import spearmanr
+        rho, _ = spearmanr(comparison_df['mean_expr'], comparison_df['mean_access'])
+        label = "Spearman ρ"
+    elif method == "pearson":
+        from scipy.stats import pearsonr
+        rho, _ = pearsonr(comparison_df['mean_expr'], comparison_df['mean_access'])
+        label = "Pearson r"
+    else:
+        raise ValueError("Method must be 'spearman' or 'pearson'.")
+
+    # Plotting
+    if plot:
+        import seaborn as sns
+        import matplotlib.pyplot as plt
+
+        plt.figure(figsize=(12, 4))
+        sns.violinplot(data=atac.obs, x=subclass_key, y=f'access_{gene}_peak')
+        plt.xticks(rotation=90)
+        plt.title(f'Accessibility of {peak} (linked to {gene})')
+        plt.show()
+
+        plt.figure(figsize=(12, 4))
+        sns.violinplot(data=expr.obs, x=subclass_key, y=f'{gene}_expr')
+        plt.xticks(rotation=90)
+        plt.title(f'Expression of {gene}')
+        plt.show()
+
+        sns.regplot(data=comparison_df, x='mean_expr', y='mean_access')
+        plt.xlabel(f'Mean {gene} Expression')
+        plt.ylabel(f'Mean {gene} Promoter Accessibility')
+        plt.title(f'{label} = {rho:.2f}')
+        plt.show()
+
+    return rho
