@@ -527,16 +527,26 @@ def analyze_gene_peak_relationship(expr, atac, gene, peak, subclass_key="subclas
     Returns:
         rho: Correlation coefficient between mean expression and accessibility across subclasses.
     """
-    # Extract and store vectors
-    expr.obs[f"{gene}_expr"] = expr[:, gene].X.toarray().flatten()
-    atac.obs[f"access_{gene}_peak"] = atac[:, peak].X.toarray().flatten()
+    import pandas as pd
 
-    # Means per subclass
-    mean_expr = expr.obs.groupby(subclass_key)[f'{gene}_expr'].mean()
-    mean_access = atac.obs.groupby(subclass_key)[f'access_{gene}_peak'].mean()
+    # Local vectors
+    gene_expr_vec = expr[:, gene].X.toarray().flatten()
+    peak_access_vec = atac[:, peak].X.toarray().flatten()
+
+    # Build temporary DataFrames for grouping
+    expr_df = expr.obs[[subclass_key]].copy()
+    expr_df["gene_expr"] = gene_expr_vec
+
+    atac_df = atac.obs[[subclass_key]].copy()
+    atac_df["peak_access"] = peak_access_vec
+
+    # Compute means
+    mean_expr = expr_df.groupby(subclass_key)["gene_expr"].mean()
+    mean_access = atac_df.groupby(subclass_key)["peak_access"].mean()
+
     comparison_df = pd.DataFrame({'mean_expr': mean_expr, 'mean_access': mean_access}).dropna()
 
-    # Choose correlation method
+    # Correlation
     if method == "spearman":
         from scipy.stats import spearmanr
         rho, _ = spearmanr(comparison_df['mean_expr'], comparison_df['mean_access'])
@@ -554,13 +564,13 @@ def analyze_gene_peak_relationship(expr, atac, gene, peak, subclass_key="subclas
         import matplotlib.pyplot as plt
 
         plt.figure(figsize=(12, 4))
-        sns.violinplot(data=atac.obs, x=subclass_key, y=f'access_{gene}_peak')
+        sns.violinplot(data=atac_df, x=subclass_key, y="peak_access")
         plt.xticks(rotation=90)
         plt.title(f'Accessibility of {peak} (linked to {gene})')
         plt.show()
 
         plt.figure(figsize=(12, 4))
-        sns.violinplot(data=expr.obs, x=subclass_key, y=f'{gene}_expr')
+        sns.violinplot(data=expr_df, x=subclass_key, y="gene_expr")
         plt.xticks(rotation=90)
         plt.title(f'Expression of {gene}')
         plt.show()
@@ -572,3 +582,66 @@ def analyze_gene_peak_relationship(expr, atac, gene, peak, subclass_key="subclas
         plt.show()
 
     return rho
+
+
+def run_peak_gene_correlation_analysis(
+    expr,
+    atac,
+    anno_results_by_peak,
+    no_anno_results_by_peak,
+    anno_results_by_gene,
+    no_anno_results_by_gene,
+    method="pearson",
+    subclass_key="subclass",
+    keep_no_anno=False,
+    top_n=20
+):
+    def safe_correlation(gene, peak, result_dict):
+        try:
+            rho = analyze_gene_peak_relationship(
+                expr, atac, gene=gene, peak=peak,
+                plot=False, method=method,
+                subclass_key=subclass_key
+            )
+            result_dict[(gene, peak)] = rho
+        except Exception as e:
+            print(f"Skipped ({gene}, {peak}) due to error: {e}")
+
+    results = {}
+
+    if not keep_no_anno:
+        # Use all 4 structures
+        for peak, genes in anno_results_by_peak.items():
+            for gene in genes:
+                safe_correlation(gene, peak, results)
+
+        for gene, df in anno_results_by_gene.items():
+            for peak in df.index:
+                safe_correlation(gene, peak, results)
+
+        for peak, genes in no_anno_results_by_peak.items():
+            for gene in genes:
+                safe_correlation(gene, peak, results)
+
+        for gene, df in no_anno_results_by_gene.items():
+            for peak in df.index:
+                safe_correlation(gene, peak, results)
+
+    else:
+        # Use only the no_anno structures
+        for peak, genes in no_anno_results_by_peak.items():
+            for gene in genes:
+                safe_correlation(gene, peak, results)
+
+        for gene, df in no_anno_results_by_gene.items():
+            for peak in df.index:
+                safe_correlation(gene, peak, results)
+
+    # Convert to DataFrame
+    df_results = pd.DataFrame.from_dict(results, orient='index', columns=[f'{method}_rho'])
+    df_results.index.names = ['gene_peak']
+    df_results = df_results.reset_index()
+
+    # Sort and return top N
+    top_df = df_results.sort_values(f'{method}_rho', ascending=False).head(top_n)
+    return top_df
