@@ -594,7 +594,8 @@ def run_peak_gene_correlation_analysis(
     method="pearson",
     subclass_key="subclass",
     keep_no_anno=False,
-    top_n=20
+    top_n=20,
+    genes_of_interest=None  # NEW PARAM
 ):
     def safe_correlation(gene, peak, result_dict):
         try:
@@ -609,33 +610,40 @@ def run_peak_gene_correlation_analysis(
 
     results = {}
 
+    def gene_is_valid(gene):
+        return genes_of_interest is None or gene in genes_of_interest
+
     if not keep_no_anno:
-        # Use all 4 structures
         for peak, genes in anno_results_by_peak.items():
             for gene in genes:
-                safe_correlation(gene, peak, results)
+                if gene_is_valid(gene):
+                    safe_correlation(gene, peak, results)
 
         for gene, df in anno_results_by_gene.items():
-            for peak in df.index:
-                safe_correlation(gene, peak, results)
+            if gene_is_valid(gene):
+                for peak in df.index:
+                    safe_correlation(gene, peak, results)
 
         for peak, genes in no_anno_results_by_peak.items():
             for gene in genes:
-                safe_correlation(gene, peak, results)
+                if gene_is_valid(gene):
+                    safe_correlation(gene, peak, results)
 
         for gene, df in no_anno_results_by_gene.items():
-            for peak in df.index:
-                safe_correlation(gene, peak, results)
+            if gene_is_valid(gene):
+                for peak in df.index:
+                    safe_correlation(gene, peak, results)
 
     else:
-        # Use only the no_anno structures
         for peak, genes in no_anno_results_by_peak.items():
             for gene in genes:
-                safe_correlation(gene, peak, results)
+                if gene_is_valid(gene):
+                    safe_correlation(gene, peak, results)
 
         for gene, df in no_anno_results_by_gene.items():
-            for peak in df.index:
-                safe_correlation(gene, peak, results)
+            if gene_is_valid(gene):
+                for peak in df.index:
+                    safe_correlation(gene, peak, results)
 
     # Convert to DataFrame
     df_results = pd.DataFrame.from_dict(results, orient='index', columns=[f'{method}_rho'])
