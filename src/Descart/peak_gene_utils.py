@@ -63,7 +63,8 @@ def get_filtered_peak_results_by_gene(
     ccre_bed,
     top_n=200,
     max_distance=100_000,
-    keep_annotated=True
+    keep_annotated=True,
+    max_n_by_corr=None  # NEW: restrict by top correlation
 ):
     """
     Identify top correlated ATAC peaks for each gene in a list, optionally filtering
@@ -165,7 +166,8 @@ def get_genes_associated_with_peaks(
     ccre_bed=None,
     keep_annotated=None,
     max_distance=100_000,
-    top_n_per_peak=10
+    top_n_per_peak=10,
+    max_genes_to_check=None  # NEW
 ):
     """
     Identify genes that are strongly correlated and genomically proximal to given peaks.
@@ -218,8 +220,14 @@ def get_genes_associated_with_peaks(
         top_gene_indices = np.argsort(correlations)[::-1]
 
         filtered_genes = []
+        num_checked = 0  # count how many correlation-ranked genes we evaluate
 
         for gene_idx in top_gene_indices:
+            if max_genes_to_check is not None and num_checked >= max_genes_to_check:
+                break
+
+            num_checked += 1  # only increment if we're actually checking the gene
+
             gene_name = expr.var_names[gene_idx]
             gene_row = expr.var.loc[gene_name]
 
@@ -485,7 +493,9 @@ def get_correlated_peaks_near_peaks(
 
         filtered_peaks = []
 
+        i = 0
         for other_idx in top_peak_indices:
+            i+=1
             if other_idx == peak_idx:
                 continue  # skip self
 
@@ -499,6 +509,8 @@ def get_correlated_peaks_near_peaks(
             distance = abs(peak_mid - other_mid)
 
             if distance <= max_distance:
+                #print(i)
+                #print()
                 filtered_peaks.append(other_peak)
 
             if len(filtered_peaks) == top_n_per_peak:
@@ -510,7 +522,7 @@ def get_correlated_peaks_near_peaks(
     return results
 
 
-def analyze_gene_peak_relationship(expr, atac, gene, peak, subclass_key="subclass", plot=False, method="spearman"):
+def analyze_gene_peak_relationship(expr, atac, gene, peak, subclass_key="subclass", plot=False, method="spearman", p=False):
     """
     Analyze the relationship between a gene's expression and a peak's accessibility across subclasses.
     Returns the Spearman or Pearson correlation coefficient between mean expression and accessibility.
@@ -549,11 +561,11 @@ def analyze_gene_peak_relationship(expr, atac, gene, peak, subclass_key="subclas
     # Correlation
     if method == "spearman":
         from scipy.stats import spearmanr
-        rho, _ = spearmanr(comparison_df['mean_expr'], comparison_df['mean_access'])
+        rho, p_val = spearmanr(comparison_df['mean_expr'], comparison_df['mean_access'])
         label = "Spearman ρ"
     elif method == "pearson":
         from scipy.stats import pearsonr
-        rho, _ = pearsonr(comparison_df['mean_expr'], comparison_df['mean_access'])
+        rho, p_val = pearsonr(comparison_df['mean_expr'], comparison_df['mean_access'])
         label = "Pearson r"
     else:
         raise ValueError("Method must be 'spearman' or 'pearson'.")
@@ -578,10 +590,61 @@ def analyze_gene_peak_relationship(expr, atac, gene, peak, subclass_key="subclas
         sns.regplot(data=comparison_df, x='mean_expr', y='mean_access')
         plt.xlabel(f'Mean {gene} Expression')
         plt.ylabel(f'Mean {gene} Promoter Accessibility')
-        plt.title(f'{label} = {rho:.2f}')
+        if p:
+            plt.title(f'{label} = {rho:.2f}, p = {p_val:.2g}')
+        else:
+            plt.title(f'{label} = {rho:.2f}')
         plt.show()
 
-    return rho
+    if p:
+        return rho, p_val
+    else:
+        return rho
+
+from sklearn.metrics.pairwise import cosine_similarity
+
+def cosine_similarity_by_subclass(expr, atac, gene, peak, subclass_key="subclass", plot=False):
+    """
+    Compute cosine similarity between gene expression and peak accessibility
+    within each subclass.
+
+    Returns a dictionary: subclass → cosine similarity.
+    """
+    expr_vec = expr[:, gene].X.toarray().flatten()
+    peak_vec = atac[:, peak].X.toarray().flatten()
+
+    df = expr.obs[[subclass_key]].copy()
+    df["gene_expr"] = expr_vec
+    df["peak_access"] = peak_vec
+
+    similarities = {}
+
+    for subclass, group in df.groupby(subclass_key):
+        expr_values = group["gene_expr"].values.reshape(1, -1)
+        access_values = group["peak_access"].values.reshape(1, -1)
+
+        # Skip if too few cells or all zeros
+        if expr_values.shape[1] < 3 or np.all(expr_values == 0) or np.all(access_values == 0):
+            similarities[subclass] = np.nan
+            continue
+
+        sim = cosine_similarity(expr_values, access_values)[0, 0]
+        similarities[subclass] = sim
+
+    if plot:
+        import matplotlib.pyplot as plt
+        import seaborn as sns
+        sim_series = pd.Series(similarities).dropna()
+        plt.figure(figsize=(10, 4))
+        sns.barplot(x=sim_series.index, y=sim_series.values)
+        plt.xticks(rotation=90)
+        plt.ylabel("Cosine Similarity")
+        plt.title(f"Gene–Peak Cosine Similarity in Each Subclass ({gene} ↔ {peak})")
+        plt.tight_layout()
+        plt.show()
+
+    return similarities
+
 
 
 def run_peak_gene_correlation_analysis(
