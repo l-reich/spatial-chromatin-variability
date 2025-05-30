@@ -21,6 +21,7 @@ def get_top_correlated_peaks_near_gene(
 
     Parameters:
     - gene_name (str): Name of the gene.
+    
     - expr (AnnData): Expression data with gene positions in .var ('chrom', 'start', 'end').
     - atac (AnnData): ATAC data with peak positions in .var ('chrom', 'start', 'end').
     - g_p_similarity (np.ndarray): Gene-peak correlation matrix (genes x peaks).
