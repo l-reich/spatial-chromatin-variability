@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import squidpy as sq
 from scipy.stats import pearsonr, spearmanr, kruskal
+from statsmodels.stats.multitest import multipletests
 
 
 def get_top_correlated_peaks_near_gene(
@@ -666,8 +667,9 @@ def run_peak_gene_correlation_analysis(
             rho = analyze_gene_peak_relationship(
                 expr, atac, gene=gene, peak=peak,
                 plot=False, method=method,
-                subclass_key=subclass_key
+                subclass_key=subclass_key, p=True
             )
+            #print(rho)
             result_dict[(gene, peak)] = rho
         except Exception as e:
             print(f"Skipped ({gene}, {peak}) due to error: {e}")
@@ -709,11 +711,20 @@ def run_peak_gene_correlation_analysis(
                 for peak in df.index:
                     safe_correlation(gene, peak, results)
 
-    # Convert to DataFrame
-    df_results = pd.DataFrame.from_dict(results, orient='index', columns=[f'{method}_rho'])
-    df_results.index.names = ['gene_peak']
-    df_results = df_results.reset_index()
-
+      # Convert results dict to DataFrame
+    df_results = pd.DataFrame(
+        [(gene, peak, rho, pval) for (gene, peak), (rho, pval) in results.items()],
+        columns=["gene", "peak", f"{method}_rho", "pval"]
+    )
+    
+    # Add gene_peak column as tuple
+    df_results["gene_peak"] = list(zip(df_results["gene"], df_results["peak"]))
+    
+    # Adjust p-values using Benjamini-Hochberg
+    if not df_results.empty:
+        _, pvals_adj, _, _ = multipletests(df_results["pval"], method="fdr_bh")
+        df_results["pval_adj"] = pvals_adj
+    
     # Sort and return top N
-    top_df = df_results.sort_values(f'{method}_rho', ascending=False).head(top_n)
+    top_df = df_results.sort_values(f"{method}_rho", ascending=False).head(top_n)
     return top_df
