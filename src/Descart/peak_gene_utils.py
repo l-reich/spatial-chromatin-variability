@@ -555,8 +555,9 @@ def analyze_gene_peak_relationship(expr, atac, gene, peak, subclass_key="subclas
     atac_df["peak_access"] = peak_access_vec
 
     # Compute means
-    mean_expr = expr_df.groupby(subclass_key)["gene_expr"].mean()
-    mean_access = atac_df.groupby(subclass_key)["peak_access"].mean()
+    mean_expr = expr_df.groupby(subclass_key, observed=False)["gene_expr"].mean()
+    mean_access = atac_df.groupby(subclass_key, observed=False)["peak_access"].mean()
+
 
     comparison_df = pd.DataFrame({'mean_expr': mean_expr, 'mean_access': mean_access}).dropna()
 
