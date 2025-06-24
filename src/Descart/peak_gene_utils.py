@@ -160,6 +160,43 @@ def get_overlapping_ccres(peak_name: str, ccre_bed: pd.DataFrame) -> pd.DataFram
     return overlaps
 
 
+def get_peak_overlap_mask(peaks: list[str], ccre_bed: pd.DataFrame) -> pd.Series:
+    """
+    Return a boolean Series indicating whether each peak overlaps with any cCRE.
+    
+    Parameters:
+    - peaks (list of str): List of peaks in 'chrX:start-end' format.
+    - ccre_bed (pd.DataFrame): BED-style DataFrame with 'chrom', 'start', 'end'.
+    
+    Returns:
+    - pd.Series: Boolean Series where each entry corresponds to a peak in `peaks`.
+    """
+    # Preprocess peaks into a DataFrame
+    peak_data = []
+    for name in peaks:
+        chrom, coords = name.split(":")
+        start, end = map(int, coords.split("-"))
+        peak_data.append((name, chrom, start, end))
+
+    peaks_df = pd.DataFrame(peak_data, columns=["name", "chrom", "start", "end"])
+    overlap = []
+
+    i=0
+
+    for _, peak in peaks_df.iterrows():
+        i+=1
+        if i % 100 == 0:
+            print(i)
+        overlaps = (
+            (ccre_bed["chrom"] == peak["chrom"]) &
+            (ccre_bed["start"] <= peak["end"]) &
+            (ccre_bed["end"] >= peak["start"])
+        )
+        overlap.append(overlaps.any())
+
+    return pd.Series(overlap, index=peaks_df["name"])
+
+
 def get_genes_associated_with_peaks(
     peak_names,
     expr,
