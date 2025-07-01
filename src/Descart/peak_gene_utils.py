@@ -766,3 +766,123 @@ def run_peak_gene_correlation_analysis(
     # Sort and return top N
     top_df = df_results.sort_values(f"{method}_rho", ascending=False).head(top_n)
     return top_df
+
+
+from scipy.stats import pearsonr
+from statsmodels.stats.multitest import multipletests
+
+
+def analyze_nichewise_correlation(
+    expr,
+    atac,
+    anno_results_by_peak,
+    no_anno_results_by_peak,
+    anno_results_by_gene,
+    no_anno_results_by_gene,
+    subclass_key="niche"
+):
+    """
+    For each gene–peak pair in the result structures, calculate Pearson correlation
+    between gene expression and peak accessibility within each niche.
+
+    Parameters:
+    - expr: AnnData with gene expression and .obs[subclass_key] annotation.
+    - atac: AnnData with peak accessibility.
+    - *_results_by_*: dictionaries mapping genes/peaks to associated peaks/genes.
+    - subclass_key: str, key in .obs indicating niche annotation.
+
+    Returns:
+    - pd.DataFrame with columns: gene, peak, niche, pearson_r, pval, pval_adj
+    """
+    import pandas as pd
+
+    results = []
+
+    def compute_corr(gene, peak):
+        x = expr[:, gene].X.toarray().flatten()
+        y = atac[:, peak].X.toarray().flatten()
+        df = expr.obs[[subclass_key]].copy()
+        df["gene_expr"] = x
+        df["peak_access"] = y
+        for niche, group in df.groupby(subclass_key):
+            if group.shape[0] < 3:
+                continue  # skip small groups
+            r, p = pearsonr(group["gene_expr"], group["peak_access"])
+            results.append({
+                "gene": gene,
+                "peak": peak,
+                "niche": niche,
+                "pearson_r": r,
+                "pval": p
+            })
+
+    def handle_result_dict(result_dict):
+        for gene_or_peak, associated in result_dict.items():
+            if isinstance(associated, pd.DataFrame):  # gene_to_peak dict
+                for peak in associated.index:
+                    compute_corr(gene_or_peak, peak)
+            else:  # peak_to_gene dict
+                for gene in associated:
+                    compute_corr(gene, gene_or_peak)
+
+    handle_result_dict(anno_results_by_peak)
+    handle_result_dict(no_anno_results_by_peak)
+    handle_result_dict(anno_results_by_gene)
+    handle_result_dict(no_anno_results_by_gene)
+
+    df = pd.DataFrame(results)
+    if not df.empty:
+        _, pvals_adj, _, _ = multipletests(df["pval"], method="fdr_bh")
+        df["pval_adj"] = pvals_adj
+    else:
+        df["pval_adj"] = []
+
+    return df
+    
+
+def plot_gene_peak_niche_corr(expr, atac, gene, peak, niche, subclass_key="niche"):
+    """
+    Plot gene expression vs peak accessibility across all cells in one niche.
+
+    Parameters:
+    - expr: AnnData object with gene expression.
+    - atac: AnnData object with peak accessibility.
+    - gene: str, gene name in expr.var_names.
+    - peak: str, peak name in atac.var_names.
+    - niche: str or int, value in expr.obs[subclass_key] to filter cells.
+    - subclass_key: str, column in .obs that contains the niche labels.
+
+    Returns:
+    - None (shows a plot).
+    """
+    # Get data vectors
+    x = expr[:, gene].X.toarray().flatten()
+    y = atac[:, peak].X.toarray().flatten()
+
+    # Build DataFrame and subset
+    df = expr.obs[[subclass_key]].copy()
+    df["gene_expr"] = x
+    df["peak_access"] = y
+    df_niche = df[df[subclass_key] == niche]
+
+    if df_niche.shape[0] < 3:
+        print(f"Not enough cells in niche {niche} to compute correlation.")
+        return
+
+    # Compute correlation
+    r, p = pearsonr(df_niche["gene_expr"], df_niche["peak_access"])
+
+    # Plot
+    plt.figure(figsize=(6, 4))
+    sns.regplot(
+        data=df_niche,
+        x="gene_expr",
+        y="peak_access",
+        scatter_kws={"s": 30},
+        line_kws={"color": "steelblue"}
+    )
+    plt.xlabel(f"Mean {gene} Expression")
+    plt.ylabel(f"Mean Peak Accessibility")
+    plt.title(f"Pearson r = {r:.2f}, p = {p:.3g} (niche: {niche})")
+    plt.tight_layout()
+    plt.show()
