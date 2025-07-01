@@ -450,7 +450,10 @@ def plot_peak_accessibility(
     # Get peak values
     peak_idx = atac.var_names.get_loc(peak_name)
     values_sparse = atac.X[:, peak_idx]
-    values = np.array(values_sparse.todense()).flatten()
+    if scipy.sparse.issparse(values_sparse):
+        values = np.array(values_sparse.todense()).flatten()
+    else:
+        values = np.asarray(values_sparse).flatten()
 
     # Get spatial coordinates
     coords = atac.obsm["spatial"]
