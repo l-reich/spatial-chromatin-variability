@@ -12,7 +12,7 @@ This project investigates **spatial variability in chromatin accessibility** at 
 ## Methods
 
 - **Datasets**
-  - [Spatial transcriptomics](https://doi.brainimagelibrary.org/doi/10.35077/g.21) (MERFISH, mouse primary mortor cortex)
+  - [Spatial transcriptomics](https://doi.brainimagelibrary.org/doi/10.35077/g.21) (MERFISH, mouse primary motor cortex)
   - [Joint scRNA-seq + scATAC-seq](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE140203) (SHARE-seq, whole mouse brain)
 
 - **Core tools**
