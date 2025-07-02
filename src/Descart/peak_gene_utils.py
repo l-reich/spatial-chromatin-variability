@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 import pandas as pd
 import anndata
@@ -296,7 +298,9 @@ def plot_peak_gene_pairs(
     atac_adata,
     mode='peak_to_gene',
     n_pairs=10,
-    size=20
+    size=20,
+    save=False,
+    save_dir='plots'
 ):
     """
     Plot all gene-peak spatial expression pairs side-by-side using squidpy.
@@ -308,6 +312,8 @@ def plot_peak_gene_pairs(
     - mode (str): 'peak_to_gene' or 'gene_to_peak'
     - n_pairs (int): Max number of pairs to plot
     - size (int): Point size in plots
+    - save (bool): Whether to save each plot
+    - save_dir (str): Directory where plots are saved if save=True
 
     Returns:
     - None
@@ -334,6 +340,10 @@ def plot_peak_gene_pairs(
     # Limit total number of pairs
     pairs = pairs[:n_pairs]
 
+    # Create save directory if needed
+    if save and not os.path.exists(save_dir):
+        os.makedirs(save_dir)
+
     for i, (peak, gene) in enumerate(pairs):
         fig, axes = plt.subplots(1, 2, figsize=(8, 4))
         fig.suptitle(f"Pair {i+1}: {gene} ↔ {peak}", fontsize=14)
@@ -355,7 +365,15 @@ def plot_peak_gene_pairs(
             axes[1].set_title(f"Peak: {peak} (not found)")
 
         plt.tight_layout()
+
+        if save:
+            # Sanitize filename to avoid invalid characters
+            safe_gene = gene.replace("/", "_").replace(":", "_")
+            filename = os.path.join(save_dir, f"{i+1:02d}_{safe_gene}.png")
+            plt.savefig(filename, dpi=300)
+
         plt.show()
+
 
 
 def plot_peak_peak_pairs(
@@ -840,7 +858,16 @@ def analyze_nichewise_correlation(
     return df
     
 
-def plot_gene_peak_niche_corr(expr, atac, gene, peak, niche, subclass_key="niche"):
+def plot_gene_peak_niche_corr(
+    expr,
+    atac,
+    gene,
+    peak,
+    niche,
+    subclass_key="niche",
+    save=False,
+    save_dir="plots"
+):
     """
     Plot gene expression vs peak accessibility across all cells in one niche.
 
@@ -851,9 +878,11 @@ def plot_gene_peak_niche_corr(expr, atac, gene, peak, niche, subclass_key="niche
     - peak: str, peak name in atac.var_names.
     - niche: str or int, value in expr.obs[subclass_key] to filter cells.
     - subclass_key: str, column in .obs that contains the niche labels.
+    - save (bool): Whether to save the plot as a file.
+    - save_dir (str): Directory where the plot will be saved.
 
     Returns:
-    - None (shows a plot).
+    - None (shows or saves a plot).
     """
     # Get data vectors
     x = expr[:, gene].X.toarray().flatten()
@@ -885,4 +914,14 @@ def plot_gene_peak_niche_corr(expr, atac, gene, peak, niche, subclass_key="niche
     plt.ylabel(f"Mean Peak Accessibility")
     plt.title(f"Pearson r = {r:.2f}, p = {p:.3g} (niche: {niche})")
     plt.tight_layout()
+
+    if save:
+        if not os.path.exists(save_dir):
+            os.makedirs(save_dir)
+        # Sanitize filename
+        safe_gene = gene.replace("/", "_").replace(":", "_")
+        safe_peak = peak.replace("/", "_").replace(":", "_")
+        filename = os.path.join(save_dir, f"{safe_gene}__{safe_peak}__niche_{niche}.png")
+        plt.savefig(filename, dpi=300)
+
     plt.show()
