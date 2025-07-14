@@ -346,13 +346,15 @@ def plot_peak_gene_pairs(
 
     for i, (peak, gene) in enumerate(pairs):
         fig, axes = plt.subplots(1, 2, figsize=(8, 4))
-        fig.suptitle(f"Pair {i+1}: {gene} ↔ {peak}", fontsize=14)
+       # fig.suptitle(f"Pair {i+1}: {gene} ↔ {peak}", fontsize=18)
+
+       # fig.subplots_adjust(top=5.85) 
 
         if gene in expr_adata.var_names:
             sq.pl.spatial_scatter(
                 expr_adata, color=gene, ax=axes[0], size=size, shape=None
             )
-            axes[0].set_title(f"Gene: {gene}")
+            axes[0].set_title(f"Gene: {gene}", fontsize=15)
         else:
             axes[0].set_title(f"Gene: {gene} (not found)")
 
@@ -360,11 +362,16 @@ def plot_peak_gene_pairs(
             sq.pl.spatial_scatter(
                 atac_adata, color=peak, ax=axes[1], size=size, shape=None
             )
-            axes[1].set_title(f"Peak: {peak}")
+            axes[1].set_title(f"Peak: {peak}", fontsize=14)
         else:
             axes[1].set_title(f"Peak: {peak} (not found)")
 
+        for ax in axes:
+            ax.set_xlabel("")
+            ax.set_ylabel("")
+
         plt.tight_layout()
+        #plt.tight_layout(rect=[0, 0, 1, 0.90])  # Leave room at the top
 
         if save:
             # Sanitize filename to avoid invalid characters
@@ -636,22 +643,26 @@ def analyze_gene_peak_relationship(expr, atac, gene, peak, subclass_key="subclas
         plt.figure(figsize=(12, 4))
         sns.violinplot(data=atac_df, x=subclass_key, y="peak_access")
         plt.xticks(rotation=90)
-        plt.title(f'Accessibility of {peak} (linked to {gene})')
+        plt.title(f'Accessibility of {peak} (linked to {gene})', fontsize=18)
+        plt.xlabel(subclass_key, fontsize=17)
+        plt.ylabel(f'Peak Accessibility', fontsize=17)
         plt.show()
 
         plt.figure(figsize=(12, 4))
         sns.violinplot(data=expr_df, x=subclass_key, y="gene_expr")
         plt.xticks(rotation=90)
-        plt.title(f'Expression of {gene}')
+        plt.title(f'Expression of {gene}', fontsize=18)
+        plt.xlabel(subclass_key, fontsize=17)
+        plt.ylabel(f'Gene Expression', fontsize=17)
         plt.show()
 
         sns.regplot(data=comparison_df, x='mean_expr', y='mean_access')
-        plt.xlabel(f'Mean {gene} Expression')
-        plt.ylabel(f'Mean {gene} Promoter Accessibility')
+        plt.xlabel(f'Mean {gene} Expression', fontsize=17)
+        plt.ylabel(f'Mean Peak Accessibility', fontsize=17)
         if p:
-            plt.title(f'{label} = {rho:.2f}, p = {p_val:.2g}')
+            plt.title(f'{label} = {rho:.2f}, p = {p_val:.2g}', fontsize=18)
         else:
-            plt.title(f'{label} = {rho:.2f}')
+            plt.title(f'{label} = {rho:.2f}', fontsize=18)
         plt.show()
 
     if p:
