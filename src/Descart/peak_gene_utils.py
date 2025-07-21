@@ -919,11 +919,12 @@ def plot_gene_peak_niche_corr(
         x="gene_expr",
         y="peak_access",
         scatter_kws={"s": 30},
-        line_kws={"color": "steelblue"}
+        line_kws={"color": "red"}
     )
-    plt.xlabel(f"Mean {gene} Expression")
-    plt.ylabel(f"Mean Peak Accessibility")
-    plt.title(f"Pearson r = {r:.2f}, p = {p:.3g} (niche: {niche})")
+    plt.ylim(bottom=0)
+    plt.xlabel(f"Mean {gene} Expression", fontsize=15)
+    plt.ylabel(f"Mean Peak Accessibility", fontsize=15)
+    plt.title(f"Pearson r = {r:.2f}, p = {p:.3g} (niche: {niche})", fontsize=17)
     plt.tight_layout()
 
     if save:
@@ -933,6 +934,80 @@ def plot_gene_peak_niche_corr(
         safe_gene = gene.replace("/", "_").replace(":", "_")
         safe_peak = peak.replace("/", "_").replace(":", "_")
         filename = os.path.join(save_dir, f"{safe_gene}__{safe_peak}__niche_{niche}.png")
+        plt.savefig(filename, dpi=300)
+
+    plt.show()
+
+
+def plot_gene_peak_corr_global(
+    expr,
+    atac,
+    gene,
+    peak,
+    niche=None,
+    subclass_key="niche",
+    save=False,
+    save_dir="plots"
+):
+    """
+    Plot gene expression vs peak accessibility across all cells,
+    either globally or within one niche. Also shows global correlation for reference.
+
+    Parameters:
+    - expr: AnnData object with gene expression.
+    - atac: AnnData object with peak accessibility.
+    - gene: str, gene name in expr.var_names.
+    - peak: str, peak name in atac.var_names.
+    - niche: str or int, optional. If None, compute global correlation.
+    - subclass_key: str, column in .obs that contains the niche labels.
+    - save (bool): Whether to save the plot as a file.
+    - save_dir (str): Directory where the plot will be saved.
+
+    Returns:
+    - None (shows or saves a plot).
+    """
+    # Prepare data
+    x = expr[:, gene].X.toarray().flatten()
+    y = atac[:, peak].X.toarray().flatten()
+    df = expr.obs[[subclass_key]].copy()
+    df["gene_expr"] = x
+    df["peak_access"] = y
+
+    # Compute global correlation
+    r_all, p_all = pearsonr(df["gene_expr"], df["peak_access"])
+
+    if niche is not None:
+        df = df[df[subclass_key] == niche]
+        if df.shape[0] < 3:
+            print(f"Not enough cells in niche {niche} to compute correlation.")
+            return
+        r, p = pearsonr(df["gene_expr"], df["peak_access"])
+        title = f"Pearson r = {r:.2f}, p = {p:.2g} (niche: {niche})\nGlobal r = {r_all:.2f}, p = {p_all:.2g}"
+    else:
+        r, p = r_all, p_all
+        title = f"Global Pearson r = {r:.2f}, p = {p:.2g}"
+
+    # Plot
+    plt.figure(figsize=(6, 4))
+    sns.regplot(
+        data=df,
+        x="gene_expr",
+        y="peak_access",
+        scatter_kws={"s": 30},
+        line_kws={"color": "red"}
+    )
+    plt.ylim(bottom=0)
+    plt.xlabel(f"Mean {gene} Expression", fontsize=15)
+    plt.ylabel(f"Mean Peak Accessibility", fontsize=15)
+    plt.title(title, fontsize=17)
+    plt.tight_layout()
+
+    if save:
+        os.makedirs(save_dir, exist_ok=True)
+        safe_gene = gene.replace("/", "_").replace(":", "_")
+        safe_peak = peak.replace("/", "_").replace(":", "_")
+        label = f"niche_{niche}" if niche is not None else "global"
+        filename = os.path.join(save_dir, f"{safe_gene}__{safe_peak}__{label}.png")
         plt.savefig(filename, dpi=300)
 
     plt.show()
