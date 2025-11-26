@@ -1,9 +1,7 @@
-# (WORK IN PROGRESS) Investigating Multi-Omic Mapping Methods to Uncover Chromatin Variability at the Single-Cell Level
+# Investigating Multi-Omic Mapping Methods to Uncover Chromatin Variability at the Single-Cell Level
 
 **Bachelor’s Thesis – Luis Raphael Reich**  
 Technical University of Munich & LMU Munich  
-
-The thesis and this repo are still underway. 
 
 ## Overview
 
