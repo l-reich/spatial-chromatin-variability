@@ -5,7 +5,7 @@ Technical University of Munich & LMU Munich
 
 ## Overview
 
-This project investigates **spatial variability in chromatin accessibility** at the single-cell level by integrating **scRNA-seq**, **scATAC-seq**, and **spatial transcriptomics** data. The work combines state-of-the-art methods from computational biology and spatial omics to identify putative cis-regulatory interactions and uncover spatially structured gene regulation.
+This project investigates spatial variability in chromatin accessibility at the single-cell level by integrating scRNA-seq, scATAC-seq, and spatial transcriptomics data. The work combines state-of-the-art methods from computational biology and spatial omics to identify putative cis-regulatory interactions and uncover spatially structured gene regulation.
 
 ## Methods
 
@@ -37,7 +37,7 @@ A detailed explanation of the methods, analyses, and findings is provided in the
 
 > **[Thesis PDF](./06-17-thesis-draft.pdf)**
 
-## Structure (important files)
+## Project Structure
 
 ```
 ├── README.md                  # Project overview
